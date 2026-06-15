@@ -1,0 +1,54 @@
+name: Daily Crawl Stock Data
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # 18:00 Vietnam time = 11:00 UTC
+    # Monday to Friday
+    - cron: "0 11 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  crawl-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run daily crawl pipeline
+        run: uv run python -m data_pipeline.daily_crawl
+
+      - name: Show generated files
+        run: |
+          echo "Raw data:"
+          ls -lah data/raw || true
+
+          echo "Processed data:"
+          ls -lah data/processed || true
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add data/raw/fpt_stock_price.csv
+          git add data/raw/vnindex_price.csv
+          git add data/processed/merged_dataset.csv
+
+          git commit -m "Update daily stock data" || echo "No changes to commit"
+          git push
