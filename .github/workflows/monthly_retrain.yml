@@ -1,0 +1,75 @@
+name: Monthly Model Retraining
+
+on:
+  schedule:
+    # 20:00 Vietnam time = 13:00 UTC, every Monday
+    # The job only retrains on the first Monday of each month
+    - cron: "0 13 * * 1"
+
+  workflow_dispatch:
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Check first Monday of month
+        id: check_date
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual run detected. Retraining will run."
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          DAY=$(date +%d)
+          echo "Current day of month: $DAY"
+
+          if [ "$DAY" -le 7 ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip if not first Monday
+        if: steps.check_date.outputs.should_run == 'false'
+        run: echo "Skip retraining because today is not the first Monday of the month."
+
+      - name: Checkout repository
+        if: steps.check_date.outputs.should_run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        if: steps.check_date.outputs.should_run == 'true'
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        if: steps.check_date.outputs.should_run == 'true'
+        run: uv python install
+
+      - name: Install dependencies
+        if: steps.check_date.outputs.should_run == 'true'
+        run: uv sync
+
+      - name: Update latest data
+        if: steps.check_date.outputs.should_run == 'true'
+        run: |
+          uv run python -m data_pipeline.daily_crawl
+
+      - name: Retrain raw model
+        if: steps.check_date.outputs.should_run == 'true'
+        run: |
+          uv run python -m training.retrain \
+            --mode raw \
+            --raw-data data/raw/fpt_stock_price.csv \
+            --windows 3 5 7 30 \
+            --models lstm cnn1d_lstm transformer informer autoformer
+
+      - name: Upload retrained artifacts
+        if: steps.check_date.outputs.should_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-retrained-raw-model
+          path: |
+            artifacts/raw_fpt_only_residual_cnnlstm_transformer/

@@ -1,0 +1,47 @@
+name: Weekly Model Evaluation
+
+on:
+  schedule:
+    # 18:30 Vietnam time = 11:30 UTC, every Monday
+    - cron: "30 11 * * 1"
+
+  workflow_dispatch:
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Update latest data
+        run: |
+          uv run python -m data_pipeline.daily_crawl
+
+      - name: Evaluate current raw model
+        run: |
+          uv run python -m training.evaluate \
+            --data data/raw/fpt_stock_price.csv \
+            --artifact-dir artifacts/raw_fpt_only_residual_cnnlstm_transformer \
+            --max-rows 300 \
+            --output-name weekly_evaluation.csv
+
+      - name: Upload evaluation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-evaluation-results
+          path: |
+            artifacts/raw_fpt_only_residual_cnnlstm_transformer/weekly_evaluation.csv
+            artifacts/raw_fpt_only_residual_cnnlstm_transformer/evaluation_history.csv
+            artifacts/raw_fpt_only_residual_cnnlstm_transformer/weekly_predictions.csv
