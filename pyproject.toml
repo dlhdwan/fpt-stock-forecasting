@@ -16,4 +16,5 @@ dependencies = [
     "vnstock>=4.0.2",
     "streamlit>=1.58.0",
     "torch",
+    "scikit-learn>=1.9.0",
 ]
