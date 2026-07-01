@@ -1,9 +1,9 @@
 {
-    "evaluation_time": "2026-07-02 06:10:48",
+    "evaluation_time": "2026-07-02 06:35:51",
     "timezone": "Asia/Ho_Chi_Minh",
     "status": "success",
     "evaluator": "github-actions",
-    "host": "runnervmkkn4f",
+    "host": "runnervmmklqx",
     "model_info": {
         "checkpoint": "best_transformer_w3.pt",
         "model_name": "transformer"
