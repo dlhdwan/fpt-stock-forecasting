@@ -1,9 +1,9 @@
 {
-    "evaluation_time": "2026-07-02 05:44:18",
+    "evaluation_time": "2026-07-02 06:10:48",
     "timezone": "Asia/Ho_Chi_Minh",
     "status": "success",
     "evaluator": "github-actions",
-    "host": "runnervmmklqx",
+    "host": "runnervmkkn4f",
     "model_info": {
         "checkpoint": "best_transformer_w3.pt",
         "model_name": "transformer"
@@ -14,11 +14,11 @@
         "rows": 299
     },
     "metrics": {
-        "MAE": 1.3190974339513877,
-        "RMSE": 1.7486861856247693,
-        "MAPE": 1.4550603731245286,
-        "R2": 0.9771884191302439,
-        "Bias": -0.014649932759262303,
+        "MAE": 1.319097484984127,
+        "RMSE": 1.748686199161371,
+        "MAPE": 1.455060433405623,
+        "R2": 0.9771884187770744,
+        "Bias": -0.014650034824740983,
         "Directional_Accuracy": 50.50167224080268
     }
 }
