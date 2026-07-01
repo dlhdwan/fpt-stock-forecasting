@@ -29,7 +29,7 @@ def evaluate_and_get_rmse(artifact_dir: Path, data_path: str) -> float:
         metadata_path = artifact_dir / "output" / "evaluation_metadata.json"
         with open(metadata_path, "r", encoding="utf-8") as f:
             metadata = json.load(f)
-        return metadata["metrics"]["rmse"]
+        return metadata["metrics"]["RMSE"]
     except Exception as e:
         print(f"Warning: Evaluation failed at {artifact_dir}. Error: {e}")
         return float('inf')
