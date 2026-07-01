@@ -19,7 +19,7 @@ Hệ thống có hai hướng dữ liệu:
 - **Raw FPT only**: chỉ dùng dữ liệu gốc `open`, `high`, `low`, `close`, `volume`.
 - **Merged dataset**: dùng thêm các đặc trưng kỹ thuật và dữ liệu VNIndex để phục vụ thí nghiệm nội bộ.
 
-Demo Streamlit hiện ưu tiên dùng dataset **raw FPT**, vì người dùng bên ngoài thường chỉ có file OHLCV cơ bản.
+Demo Streamlit hiện ưu tiên dùng dataset **raw FPT**.
 
 ## Cấu trúc thư mục
 
@@ -33,8 +33,8 @@ FPT-STOCK-FORECASTING/
 ├── 📁 app
 │   └── 🐍 streamlit_app.py
 ├── 📁 artifacts
-│   ├── 📁 merged_dataset_residual_cnnlstm_transformer/
-│   └── 📁 raw_fpt_only_residual_cnnlstm_transformer/
+│   └── 📁 raw_fpt_only_residual_cnnlstm_transformer
+│       ├── 📁 output
 ├── 📁 data
 │   ├── 📁 processed/
 │   └── 📁 raw/
