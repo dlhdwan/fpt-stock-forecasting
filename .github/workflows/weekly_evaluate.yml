@@ -12,7 +12,6 @@ permissions:
   contents: write
 
 env:
-  # Thiết lập timezone cho môi trường runner
   TZ: "Asia/Ho_Chi_Minh"
 
 jobs:
@@ -55,26 +54,27 @@ jobs:
       - name: Show evaluation outputs
         run: |
           echo "Evaluation files:"
-          ls -lah artifacts/raw_fpt_only_residual_cnnlstm_transformer || true
+          ls -lah artifacts/raw_fpt_only_residual_cnnlstm_transformer/output || true
 
       - name: Publish Dashboard to GitHub Step Summary
         run: |
-          # Render file report.md ra màn hình Summary của GitHub Actions
-          cat artifacts/raw_fpt_only_residual_cnnlstm_transformer/report.md >> $GITHUB_STEP_SUMMARY
+          # Render file report.md từ thư mục output
+          cat artifacts/raw_fpt_only_residual_cnnlstm_transformer/output/report.md >> $GITHUB_STEP_SUMMARY
 
       - name: Commit evaluation results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Add mọi thay đổi trong thư mục artifacts để không bỏ sót file nào
-          git add artifacts/raw_fpt_only_residual_cnnlstm_transformer/*
+          # Chỉ add thư mục output để giữ repo sạch sẽ
+          git add artifacts/raw_fpt_only_residual_cnnlstm_transformer/output/*
 
-          git commit -m "chore: weekly model evaluation, dashboard and metrics update" || echo "No changes to commit"
+          git commit -m "chore: save weekly evaluation reports to output folder" || echo "No changes to commit"
           git push
 
       - name: Upload evaluation artifacts
         uses: actions/upload-artifact@v4
         with:
           name: weekly-evaluation-results
-          path: artifacts/raw_fpt_only_residual_cnnlstm_transformer/
+          # Đóng gói zip nguyên thư mục output cho tiện download
+          path: artifacts/raw_fpt_only_residual_cnnlstm_transformer/output/

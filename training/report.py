@@ -20,12 +20,16 @@ def parse_args() -> argparse.Namespace:
 def main():
     args = parse_args()
     artifact_dir = resolve_project_path(args.artifact_dir)
+    
+    # Trỏ vào thư mục output
+    output_dir = artifact_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    predictions_path = artifact_dir / "weekly_predictions.csv"
-    metadata_path = artifact_dir / "evaluation_metadata.json"
+    predictions_path = output_dir / "weekly_predictions.csv"
+    metadata_path = output_dir / "evaluation_metadata.json"
 
     if not predictions_path.exists() or not metadata_path.exists():
-        raise FileNotFoundError(f"Missing predictions or metadata files in {artifact_dir}")
+        raise FileNotFoundError(f"Missing predictions or metadata files in {output_dir}")
 
     # Đọc Metadata
     with open(metadata_path, "r", encoding="utf-8") as f:
@@ -34,7 +38,7 @@ def main():
     # Đọc dữ liệu dự đoán
     eval_df = pd.read_csv(predictions_path)
 
-    # 1. SINH BIỂU ĐỒ (ACTUAL vs PREDICTED)
+    # SINH BIỂU ĐỒ (ACTUAL vs PREDICTED)
     eval_df_sorted = eval_df.sort_values("predict_for_date")
     dates = pd.to_datetime(eval_df_sorted["predict_for_date"])
 
@@ -50,28 +54,29 @@ def main():
     plt.xticks(rotation=45)
     plt.tight_layout()
 
-    chart_path = artifact_dir / "predictions_chart.png"
+    # Lưu biểu đồ vào output_dir
+    chart_path = output_dir / "predictions_chart.png"
     plt.savefig(chart_path)
     plt.close()
 
-    # 2. SINH FILE REPORT / DASHBOARD (MARKDOWN)
-    report_path = artifact_dir / "report.md"
+    # SINH FILE REPORT / DASHBOARD (MARKDOWN)
+    report_path = output_dir / "report.md"
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("Dashboard Đánh Giá Mô Hình FPT\n\n")
         f.write(f"Thời gian đánh giá: {metadata['evaluation_time']} (Giờ VN)\n\n")
         f.write(f"Model Checkpoint: `{metadata['model_info']['checkpoint']}`\n\n")
         f.write(f"Giai đoạn đánh giá: Từ `{metadata['evaluation_window']['start']}` đến `{metadata['evaluation_window']['end']}` ({metadata['evaluation_window']['rows']} ngày)\n\n")
         
-        f.write("Tổng quan Metrics\n\n")
+        f.write("## 📈 Tổng quan Metrics\n\n")
         f.write("| Metric | Giá trị |\n")
         f.write("|---|---|\n")
         for k, v in metadata['metrics'].items():
             f.write(f"| **{k.upper()}** | `{v:.4f}` |\n")
             
-        f.write("\n## 📉 Biểu đồ Thực tế vs Dự đoán\n\n")
+        f.write("\nBiểu đồ Thực tế vs Dự đoán\n\n")
         f.write("![Predictions Chart](./predictions_chart.png)\n")
 
-    print(f"Đã tạo thành công Chart và Report tại: {artifact_dir}")
+    print(f"Đã tạo thành công Chart và Report tại: {output_dir}")
 
 if __name__ == "__main__":
     main()

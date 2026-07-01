@@ -2,9 +2,9 @@ name: Monthly Model Retraining
 
 on:
   schedule:
-    # 20:00 Vietnam time = 13:00 UTC, every Monday
+    # 19:00 Vietnam time = 12:00 UTC, every Monday
     # The job only retrains on the first Monday of each month
-    - cron: "0 13 * * 1"
+    - cron: "0 12 * * 1"
 
   workflow_dispatch:
 

@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--artifact-dir", default="artifacts/raw_fpt_only_residual_cnnlstm_transformer", help="Path to trained model artifact folder.")
     parser.add_argument("--checkpoint", default=None, help="Checkpoint filename. If not provided, best checkpoint is selected automatically.")
     parser.add_argument("--max-rows", type=int, default=300, help="Number of latest prediction rows to evaluate.")
-    parser.add_argument("--output-name", default="weekly_evaluation.csv", help="Output CSV filename inside artifact folder.")
+    parser.add_argument("--output-name", default="weekly_evaluation.csv", help="Output CSV filename.")
     return parser.parse_args()
 
 def main() -> None:
@@ -47,6 +47,10 @@ def main() -> None:
     if not artifact_dir.exists():
         raise FileNotFoundError(f"Artifact folder not found: {artifact_dir}")
 
+    # --- TẠO THƯ MỤC OUTPUT ---
+    output_dir = artifact_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.checkpoint is None:
@@ -59,7 +63,6 @@ def main() -> None:
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-    #THIẾT LẬP TIMEZONE VIỆT NAM
     vn_tz = ZoneInfo("Asia/Ho_Chi_Minh")
     current_time_vn = datetime.now(vn_tz)
 
@@ -68,6 +71,7 @@ def main() -> None:
     print(f"Time (VN): {current_time_vn.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     print("Data:", data_path)
     print("Artifact:", artifact_dir)
+    print("Output Dir:", output_dir)
     print("Checkpoint:", checkpoint_path.name)
     print("Device:", device)
     print("=" * 100)
@@ -115,11 +119,11 @@ def main() -> None:
 
     output_df = pd.DataFrame([output_row])
 
-    # Lưu kết quả evaluation ra CSV
-    output_path = artifact_dir / args.output_name
+    # Lưu file vào thư mục output_dir
+    output_path = output_dir / args.output_name
     output_df.to_csv(output_path, index=False, encoding="utf-8-sig")
 
-    history_path = artifact_dir / "evaluation_history.csv"
+    history_path = output_dir / "evaluation_history.csv"
     if history_path.exists():
         history_df = pd.read_csv(history_path)
         history_df = pd.concat([history_df, output_df], ignore_index=True)
@@ -127,10 +131,9 @@ def main() -> None:
         history_df = output_df
     history_df.to_csv(history_path, index=False, encoding="utf-8-sig")
 
-    predictions_path = artifact_dir / "weekly_predictions.csv"
+    predictions_path = output_dir / "weekly_predictions.csv"
     eval_df.to_csv(predictions_path, index=False, encoding="utf-8-sig")
 
-    # LƯU METADATA 
     metadata = {
         "evaluation_time": current_time_vn.strftime("%Y-%m-%d %H:%M:%S"),
         "timezone": "Asia/Ho_Chi_Minh",
@@ -149,13 +152,13 @@ def main() -> None:
         "metrics": metrics
     }
     
-    metadata_path = artifact_dir / "evaluation_metadata.json"
+    metadata_path = output_dir / "evaluation_metadata.json"
     with open(metadata_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=4, ensure_ascii=False)
 
     print("\nEvaluation metrics:")
     print(json.dumps(output_row, indent=4, ensure_ascii=False))
-    print("\nSaved files to:", artifact_dir)
+    print("\nSaved files to:", output_dir)
 
 if __name__ == "__main__":
     main()
