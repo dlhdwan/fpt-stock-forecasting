@@ -1,0 +1,37 @@
+{
+    "data_path": "data/raw/fpt_stock_price.csv",
+    "artifact_dir": "/home/runner/work/fpt-stock-forecasting/fpt-stock-forecasting/artifacts/raw_fpt_only_residual_cnnlstm_transformer",
+    "target_col": "target_next_close",
+    "target_date_col": "target_date",
+    "window_sizes": [
+        3,
+        5,
+        7,
+        30
+    ],
+    "model_names": [
+        "lstm",
+        "cnn1d_lstm",
+        "transformer",
+        "informer",
+        "autoformer"
+    ],
+    "train_ratio": 0.8,
+    "val_ratio": 0.1,
+    "start_date": "2019-01-01",
+    "batch_size": 32,
+    "epochs": 150,
+    "patience": 15,
+    "learning_rate": 0.001,
+    "weight_decay": 1e-05,
+    "seed": 42,
+    "use_last_close_anchor": true,
+    "lstm_hidden_size": 64,
+    "cnn_conv_channels": 16,
+    "transformer_d_model": 32,
+    "transformer_nhead": 4,
+    "transformer_layers": 1,
+    "transformer_ff": 64,
+    "dropout_lstm": 0.2,
+    "dropout_complex": 0.1
+}
