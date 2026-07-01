@@ -18,7 +18,6 @@ def run_command(command: list[str]) -> None:
 
 
 def evaluate_and_get_rmse(artifact_dir: Path, data_path: str) -> float:
-    """Run evaluation and extract RMSE from metadata."""
     try:
         run_command([
             sys.executable, "-m", "training.evaluate",
@@ -38,7 +37,7 @@ def evaluate_and_get_rmse(artifact_dir: Path, data_path: str) -> float:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Periodic retraining script with automatic rollback.")
+    parser = argparse.ArgumentParser(description="Periodic retraining script with persistent backup.")
     parser.add_argument("--skip-crawl", action="store_true", help="Skip daily data crawling before retraining.")
     parser.add_argument("--raw-data", default="data/raw/fpt_stock_price.csv", help="Path to raw FPT OHLCV CSV.")
     parser.add_argument("--epochs", type=int, default=150, help="Number of training epochs.")
@@ -68,13 +67,12 @@ def main() -> None:
     old_rmse = evaluate_and_get_rmse(artifact_dir, args.raw_data)
     print(f"Current RMSE: {old_rmse:.4f}")
 
-    print("\nCreating backup and clearing arena")
+    print("\nCreating persistent backup and clearing arena")
     if backup_dir.exists():
         shutil.rmtree(backup_dir)
     shutil.copytree(artifact_dir, backup_dir)
-    print(f"Backup created at: {backup_dir.name}/")
+    print(f"Backup updated at: {backup_dir.name}/")
 
-    # Dọn dẹp sạch sẽ thư mục chính trước khi train model mới
     for pt_file in artifact_dir.glob("*.pt"):
         pt_file.unlink()
         print(f"Removed old weight: {pt_file.name}")
@@ -99,15 +97,13 @@ def main() -> None:
     print("\nComparison and Action:")
     if new_rmse < old_rmse:
         print(f"Result: New model is better ({new_rmse:.4f} < {old_rmse:.4f}).")
-        print("Action: Keeping new model. Removing backup.")
-        shutil.rmtree(backup_dir)
+        print("Action: Keeping new model. Backup folder is preserved.")
     else:
         print(f"Result: New model is not better ({new_rmse:.4f} >= {old_rmse:.4f}).")
         print("Action: Rolling back to previous model...")
         shutil.rmtree(artifact_dir)
         shutil.copytree(backup_dir, artifact_dir)
-        shutil.rmtree(backup_dir)
-        print("Rollback complete.")
+        print("Rollback complete. Backup folder is preserved.")
 
     end_time = datetime.now(vn_tz)
     print("\n" + "-" * 80)

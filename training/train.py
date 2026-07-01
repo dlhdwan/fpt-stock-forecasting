@@ -27,6 +27,7 @@ from training.utils import ensure_dir, get_device, save_json, set_seed
 
 DEVICE = get_device()
 
+
 def create_model_context(
     input_size: int,
     feature_cols: list[str],
@@ -48,6 +49,7 @@ def create_model_context(
         target_std=float(target_scaler.scale_[0]),
         use_last_close_anchor=config.use_last_close_anchor,
     )
+
 
 def train_one_epoch(model, data_loader, criterion, optimizer) -> float:
     model.train()
@@ -76,6 +78,7 @@ def train_one_epoch(model, data_loader, criterion, optimizer) -> float:
 
     return total_loss / total_samples
 
+
 def evaluate_scaled_loss(model, data_loader, criterion) -> float:
     model.eval()
     total_loss = 0.0
@@ -96,6 +99,7 @@ def evaluate_scaled_loss(model, data_loader, criterion) -> float:
             total_samples += batch_size
 
     return total_loss / total_samples
+
 
 def train_model(
     model,
@@ -171,6 +175,7 @@ def train_model(
     model.load_state_dict(best_state)
     return model, history, checkpoint_path
 
+
 def predict_original_scale(model, data_loader, target_scaler) -> Tuple[np.ndarray, np.ndarray]:
     model.eval()
     y_true_scaled = []
@@ -188,6 +193,7 @@ def predict_original_scale(model, data_loader, target_scaler) -> Tuple[np.ndarra
     y_true = target_scaler.inverse_transform(y_true_scaled).reshape(-1)
     y_pred = target_scaler.inverse_transform(y_pred_scaled).reshape(-1)
     return y_true, y_pred
+
 
 def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
     set_seed(config.seed)
@@ -287,19 +293,38 @@ def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
     save_json(all_histories, artifact_dir / "histories.json")
 
     if len(test_results_df) > 0:
-        best_test = test_results_df.iloc[0].to_dict()
+        # Lưu cấu hình cho mô hình tốt nhất toàn cục
+        global_best_test = test_results_df.iloc[0].to_dict()
+        global_best_filename = f"best_{global_best_test['model']}_w{int(global_best_test['window'])}.pt"
+        
         best_meta = {
-            "model_name": best_test["model"],
-            "window_size": int(best_test["window"]),
-            "checkpoint_path": f"best_{best_test['model']}_w{int(best_test['window'])}.pt",
-            "metrics": best_test,
+            "model_name": global_best_test["model"],
+            "window_size": int(global_best_test["window"]),
+            "checkpoint_path": global_best_filename,
+            "metrics": global_best_test,
             "feature_cols": feature_cols,
             "target_col": config.target_col,
             "target_date_col": config.target_date_col,
         }
         save_json(best_meta, artifact_dir / "best_model_meta.json")
 
-        key = (int(best_test["window"]), best_test["model"], "test")
+        # Tìm mô hình tốt nhất cho từng kích thước window
+        best_per_window_filenames = set()
+        for w, group in test_results_df.groupby("window"):
+            best_for_w = group.sort_values("RMSE").iloc[0]
+            fname = f"best_{best_for_w['model']}_w{int(w)}.pt"
+            best_per_window_filenames.add(fname)
+
+        # Dọn dẹp: Xóa mọi checkpoint không nằm trong danh sách tốt nhất từng window
+        print("\nCleaning up suboptimal checkpoints...")
+        for pt_file in artifact_dir.glob("*.pt"):
+            if pt_file.name not in best_per_window_filenames:
+                pt_file.unlink()
+                print(f"Deleted: {pt_file.name}")
+            else:
+                print(f"Kept: {pt_file.name}")
+
+        key = (int(global_best_test["window"]), global_best_test["model"], "test")
         if key in all_predictions:
             pred = all_predictions[key]
             pred_df = pd.DataFrame({
@@ -314,6 +339,7 @@ def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
     print("Saved metrics to:", artifact_dir)
     return results_df
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Train FPT stock forecasting models.")
     parser.add_argument("--data", type=str, default=None, help="Path to CSV data.")
@@ -324,6 +350,7 @@ def parse_args():
     parser.add_argument("--start-date", type=str, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     return parser.parse_args()
+
 
 def main():
     args = parse_args()
@@ -340,6 +367,7 @@ def main():
     if args.batch_size is not None: config.batch_size = args.batch_size
 
     train_experiment(config)
+
 
 if __name__ == "__main__":
     main()
