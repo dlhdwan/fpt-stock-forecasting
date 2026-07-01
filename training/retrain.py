@@ -29,7 +29,9 @@ def evaluate_and_get_rmse(artifact_dir: Path, data_path: str) -> float:
         metadata_path = artifact_dir / "output" / "evaluation_metadata.json"
         with open(metadata_path, "r", encoding="utf-8") as f:
             metadata = json.load(f)
-        return metadata["metrics"]["RMSE"]
+            
+        metrics = metadata.get("metrics", {})
+        return metrics.get("RMSE", metrics.get("rmse", float('inf')))
     except Exception as e:
         print(f"Warning: Evaluation failed at {artifact_dir}. Error: {e}")
         return float('inf')
@@ -62,17 +64,26 @@ def main() -> None:
     artifact_dir = ROOT_DIR / "artifacts" / "raw_fpt_only_residual_cnnlstm_transformer"
     backup_dir = ROOT_DIR / "artifacts" / "backup_raw_fpt"
 
-    print("\nEvaluating current model...")
+    print("\nEvaluating current model")
     old_rmse = evaluate_and_get_rmse(artifact_dir, args.raw_data)
     print(f"Current RMSE: {old_rmse:.4f}")
 
-    print("\nCreating backup...")
+    print("\nCreating backup and clearing arena")
     if backup_dir.exists():
         shutil.rmtree(backup_dir)
     shutil.copytree(artifact_dir, backup_dir)
     print(f"Backup created at: {backup_dir.name}/")
 
-    print("\nTraining new model...")
+    # Dọn dẹp sạch sẽ thư mục chính trước khi train model mới
+    for pt_file in artifact_dir.glob("*.pt"):
+        pt_file.unlink()
+        print(f"Removed old weight: {pt_file.name}")
+        
+    output_dir = artifact_dir / "output"
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+
+    print("\nTraining new model")
     run_command([
         sys.executable, "-m", "training.train",
         "--data", args.raw_data,
@@ -81,7 +92,7 @@ def main() -> None:
         "--models", *args.models,
     ])
 
-    print("\nEvaluating new model...")
+    print("\nEvaluating new model")
     new_rmse = evaluate_and_get_rmse(artifact_dir, args.raw_data)
     print(f"New RMSE: {new_rmse:.4f}")
 

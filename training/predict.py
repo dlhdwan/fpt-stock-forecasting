@@ -23,7 +23,6 @@ REQUIRED_COLS = ["time", *RAW_FPT_FEATURES]
 
 def safe_torch_load(path: str | Path, device: torch.device):
     path = Path(path)
-
     try:
         return torch.load(path, map_location=device, weights_only=False)
     except TypeError:
@@ -32,12 +31,9 @@ def safe_torch_load(path: str | Path, device: torch.device):
 
 def parse_checkpoint_name(path: str | Path) -> tuple[str | None, int | None]:
     path = Path(path)
-
     match = re.match(r"best_(?P<model>.+)_w(?P<window>\d+)\.pt$", path.name)
-
     if not match:
         return None, None
-
     return match.group("model"), int(match.group("window"))
 
 
@@ -49,16 +45,13 @@ def list_checkpoints(artifact_dir: str | Path) -> list[Path]:
 def checkpoint_display_name(path: str | Path) -> str:
     path = Path(path)
     model_name, window_size = parse_checkpoint_name(path)
-
     if model_name is None or window_size is None:
         return path.name
-
     return f"{model_name} | window={window_size}"
 
 
 def read_metrics(artifact_dir: str | Path) -> pd.DataFrame | None:
     artifact_dir = Path(artifact_dir)
-
     candidate_files = [
         artifact_dir / "metrics_test.csv",
         artifact_dir / "metrics_all_windows_dev_test.csv",
@@ -68,59 +61,47 @@ def read_metrics(artifact_dir: str | Path) -> pd.DataFrame | None:
     for path in candidate_files:
         if not path.exists():
             continue
-
         try:
             if path.suffix.lower() == ".xlsx":
                 return pd.read_excel(path)
-
             return pd.read_csv(path)
         except Exception:
             continue
-
     return None
 
 
 def choose_best_checkpoint(artifact_dir: str | Path) -> Path:
     artifact_dir = Path(artifact_dir)
-
     checkpoints = list_checkpoints(artifact_dir)
 
     if not checkpoints:
-        raise FileNotFoundError(f"Không tìm thấy checkpoint best_*.pt trong: {artifact_dir}")
+        raise FileNotFoundError(f"No best_*.pt checkpoints found in: {artifact_dir}")
 
     best_meta_path = artifact_dir / "best_model_meta.json"
-
     if best_meta_path.exists():
         try:
             best_meta = load_json(best_meta_path)
             checkpoint_name = best_meta.get("checkpoint_path")
-
             if checkpoint_name:
                 checkpoint_path = artifact_dir / checkpoint_name
-
                 if checkpoint_path.exists():
                     return checkpoint_path
         except Exception:
             pass
 
     metrics = read_metrics(artifact_dir)
-
     if metrics is None or metrics.empty:
         return checkpoints[0]
 
     lower_cols = {column.lower(): column for column in metrics.columns}
-
     required = {"model", "window", "rmse"}
-
     if not required.issubset(lower_cols):
         return checkpoints[0]
 
     df = metrics.copy()
-
     if "split" in lower_cols:
         split_col = lower_cols["split"]
         test_df = df[df[split_col].astype(str).str.lower().eq("test")]
-
         if not test_df.empty:
             df = test_df
 
@@ -134,9 +115,7 @@ def choose_best_checkpoint(artifact_dir: str | Path) -> Path:
     for _, row in df.iterrows():
         model_name = str(row[model_col])
         window_size = int(row[window_col])
-
         checkpoint_path = artifact_dir / f"best_{model_name}_w{window_size}.pt"
-
         if checkpoint_path.exists():
             return checkpoint_path
 
@@ -146,44 +125,28 @@ def choose_best_checkpoint(artifact_dir: str | Path) -> Path:
 def load_feature_columns(artifact_dir: str | Path) -> list[str]:
     artifact_dir = Path(artifact_dir)
     path = artifact_dir / "feature_columns.json"
-
     if not path.exists():
-        raise FileNotFoundError(f"Không tìm thấy feature_columns.json: {path}")
+        raise FileNotFoundError(f"feature_columns.json not found: {path}")
 
     feature_cols = load_json(path)
-
     if not isinstance(feature_cols, list) or not feature_cols:
-        raise ValueError("feature_columns.json không hợp lệ.")
-
+        raise ValueError("Invalid feature_columns.json.")
     return [str(column) for column in feature_cols]
 
 
 def load_scalers(artifact_dir: str | Path):
     artifact_dir = Path(artifact_dir)
-
     feature_scaler_path = artifact_dir / "feature_scaler.pkl"
     target_scaler_path = artifact_dir / "target_scaler.pkl"
 
     if not feature_scaler_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy feature_scaler.pkl: {feature_scaler_path}")
-
+        raise FileNotFoundError(f"feature_scaler.pkl not found: {feature_scaler_path}")
     if not target_scaler_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy target_scaler.pkl: {target_scaler_path}")
+        raise FileNotFoundError(f"target_scaler.pkl not found: {target_scaler_path}")
 
     feature_scaler = joblib.load(feature_scaler_path)
     target_scaler = joblib.load(target_scaler_path)
-
     return feature_scaler, target_scaler
-
-
-def _infer_dataset_mode_from_features(feature_cols: list[str]) -> str:
-    raw_features = [str(col) for col in RAW_FPT_FEATURES]
-    current_features = [str(col) for col in feature_cols]
-
-    if current_features == raw_features:
-        return "raw"
-
-    return "merged"
 
 
 def _restore_config_from_checkpoint(
@@ -192,37 +155,19 @@ def _restore_config_from_checkpoint(
     feature_cols: list[str],
 ):
     checkpoint_config = checkpoint.get("config")
+    config = build_config(artifact_dir=artifact_dir)
 
     if checkpoint_config is None:
-        dataset_mode = _infer_dataset_mode_from_features(feature_cols)
-
-        config = build_config(
-            dataset_mode=dataset_mode,
-            artifact_dir=artifact_dir,
-        )
-
         return config
 
-    dataset_mode = checkpoint_config.get(
-        "dataset_mode",
-        _infer_dataset_mode_from_features(feature_cols),
-    )
-
-    config = build_config(
-        dataset_mode=dataset_mode,
-        artifact_dir=artifact_dir,
-    )
-
     for key, value in checkpoint_config.items():
-        if key in {"data_path", "artifact_dir"}:
+        if key in {"data_path", "artifact_dir", "dataset_mode"}:
             continue
-
         if hasattr(config, key):
             try:
                 setattr(config, key, value)
             except Exception:
                 pass
-
     return config
 
 
@@ -233,12 +178,11 @@ def _restore_model_context_from_checkpoint(
     target_scaler,
 ) -> ModelFactoryContext:
     context_dict = checkpoint.get("model_context")
-
     if context_dict is not None:
         return ModelFactoryContext(**context_dict)
 
     if "close" not in feature_cols:
-        raise ValueError("Không thể tạo model_context vì thiếu feature 'close'.")
+        raise ValueError("Cannot create model_context: missing feature 'close'.")
 
     close_idx = feature_cols.index("close")
 
@@ -262,29 +206,23 @@ def load_model_bundle(
     device = device or DEVICE
 
     if not artifact_dir.exists():
-        raise FileNotFoundError(f"Không tìm thấy artifact folder: {artifact_dir}")
+        raise FileNotFoundError(f"Artifact folder not found: {artifact_dir}")
 
     if checkpoint_path is None:
         checkpoint_path = choose_best_checkpoint(artifact_dir)
     else:
         checkpoint_path = Path(checkpoint_path)
-
         if not checkpoint_path.is_absolute():
-            # Trường hợp 1: checkpoint_path đã là relative path đầy đủ từ project root
-            # Ví dụ: artifacts/raw_fpt_only_residual_cnnlstm_transformer/best_cnn1d_lstm_w5.pt
             if checkpoint_path.exists():
                 checkpoint_path = checkpoint_path.resolve()
             else:
-                # Trường hợp 2: checkpoint_path chỉ là tên file
-                # Ví dụ: best_cnn1d_lstm_w5.pt
                 checkpoint_path = artifact_dir / checkpoint_path
 
     if not checkpoint_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy checkpoint: {checkpoint_path}")
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     feature_scaler, target_scaler = load_scalers(artifact_dir)
     feature_cols = load_feature_columns(artifact_dir)
-
     checkpoint = safe_torch_load(checkpoint_path, device)
 
     config = _restore_config_from_checkpoint(
@@ -312,7 +250,7 @@ def load_model_bundle(
         window_size = parsed_window_size
 
     if model_name is None or window_size is None:
-        raise KeyError("Không xác định được model_name hoặc window_size từ checkpoint.")
+        raise KeyError("Could not determine model_name or window_size from checkpoint.")
 
     model = build_single_model(
         model_name=str(model_name),
@@ -323,16 +261,13 @@ def load_model_bundle(
     try:
         model.load_state_dict(checkpoint["model_state_dict"])
     except RuntimeError as error:
-        # Fallback cho checkpoint cũ nếu model cũ train không dùng LastCloseResidualWrapper.
         if getattr(config, "use_last_close_anchor", True):
             config.use_last_close_anchor = False
-
             model = build_single_model(
                 model_name=str(model_name),
                 context=context,
                 config=config,
             )
-
             model.load_state_dict(checkpoint["model_state_dict"])
         else:
             raise error
@@ -357,7 +292,6 @@ def load_model_bundle(
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-
     normalized_columns = []
 
     for column in df.columns:
@@ -385,23 +319,17 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.rename(columns=alias_map)
     df = df.loc[:, ~df.columns.duplicated()].copy()
-
     return df
 
 
 def clean_stock_data(df: pd.DataFrame) -> pd.DataFrame:
     df = normalize_columns(df)
-
     missing_cols = [column for column in REQUIRED_COLS if column not in df.columns]
 
     if missing_cols:
-        raise KeyError(
-            "CSV thiếu cột bắt buộc: "
-            f"{missing_cols}. Cần có tối thiểu: {REQUIRED_COLS}"
-        )
+        raise KeyError(f"CSV is missing required columns: {missing_cols}. Need at minimum: {REQUIRED_COLS}")
 
     df = df[REQUIRED_COLS].copy()
-
     df["time"] = pd.to_datetime(df["time"], errors="coerce")
 
     for column in RAW_FPT_FEATURES:
@@ -416,8 +344,7 @@ def clean_stock_data(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     if df.empty:
-        raise ValueError("Data sau khi clean bị rỗng.")
-
+        raise ValueError("Data is empty after cleaning.")
     return df
 
 
@@ -434,7 +361,6 @@ def read_uploaded_csv(file_bytes) -> pd.DataFrame:
             buffer = io.BytesIO(file_bytes)
         else:
             buffer.seek(0)
-
         return pd.read_csv(buffer, encoding="latin1")
 
 
@@ -453,19 +379,13 @@ def predict_from_dataframe(
     window_size = int(bundle["window_size"])
 
     df = clean_stock_data(df_input)
-
     missing_features = [column for column in feature_cols if column not in df.columns]
 
     if missing_features:
-        raise KeyError(
-            "Data đầu vào thiếu feature mà model cần: "
-            f"{missing_features}. Model hiện tại cần: {feature_cols}"
-        )
+        raise KeyError(f"Input data missing features required by model: {missing_features}. Required: {feature_cols}")
 
     if len(df) < window_size:
-        raise ValueError(
-            f"Dữ liệu chỉ có {len(df)} dòng, không đủ window_size={window_size}."
-        )
+        raise ValueError(f"Data has {len(df)} rows, not enough for window_size={window_size}.")
 
     features_raw = df[feature_cols].to_numpy(dtype=np.float32)
     features_scaled = feature_scaler.transform(features_raw).astype(np.float32)
@@ -476,13 +396,11 @@ def predict_from_dataframe(
         first_end_idx = max(window_size - 1, len(df) - int(max_rows))
 
     rows = []
-
     model.eval()
 
     with torch.no_grad():
         for end_idx in range(first_end_idx, len(df)):
             start_idx = end_idx - window_size + 1
-
             X_window = features_scaled[start_idx:end_idx + 1]
             X_tensor = torch.as_tensor(
                 X_window.reshape(1, window_size, len(feature_cols)),
@@ -526,7 +444,6 @@ def predict_from_dataframe(
 
 def format_result_table(result_df: pd.DataFrame, descending: bool = True) -> pd.DataFrame:
     df = result_df.copy()
-
     sort_key = pd.to_datetime(df["predict_for_date"], errors="coerce")
 
     if descending:
@@ -538,18 +455,17 @@ def format_result_table(result_df: pd.DataFrame, descending: bool = True) -> pd.
 
     display_df = pd.DataFrame(
         {
-            "Ngày input": pd.to_datetime(df["input_end_date"]).dt.strftime("%Y-%m-%d"),
-            "Ngày dự báo": pd.to_datetime(df["predict_for_date"])
+            "Input Date": pd.to_datetime(df["input_end_date"]).dt.strftime("%Y-%m-%d"),
+            "Forecast Date": pd.to_datetime(df["predict_for_date"])
             .dt.strftime("%Y-%m-%d")
-            .fillna("Phiên kế tiếp"),
-            "Close hiện tại": df["last_close"].round(2),
-            "Close thực tế": df["actual_next_close"].round(2),
-            "Close dự báo": df["predicted_next_close"].round(2),
-            "Thay đổi dự báo": df["predicted_change"].round(2),
-            "% thay đổi dự báo": df["predicted_change_pct"].round(2),
+            .fillna("Next Session"),
+            "Current Close": df["last_close"].round(2),
+            "Actual Close": df["actual_next_close"].round(2),
+            "Predicted Close": df["predicted_next_close"].round(2),
+            "Predicted Change": df["predicted_change"].round(2),
+            "Predicted Change %": df["predicted_change_pct"].round(2),
         }
     )
-
     return display_df
 
 
@@ -558,7 +474,6 @@ def load_model_for_inference(
     checkpoint_name: str | None = None,
 ):
     artifact_dir = Path(artifact_dir)
-
     if checkpoint_name is None:
         checkpoint_path = choose_best_checkpoint(artifact_dir)
     else:
@@ -605,14 +520,12 @@ def predict_next_close(
     )
 
     df = pd.read_csv(data_path)
-
     result_df = predict_from_dataframe(
         df_input=df,
         bundle=bundle,
         device=DEVICE,
         max_rows=1,
     )
-
     latest_result = result_df.iloc[-1]
 
     return {
@@ -634,7 +547,6 @@ def main() -> None:
     parser.add_argument("--data", type=str, required=True)
     parser.add_argument("--artifact-dir", type=str, required=True)
     parser.add_argument("--checkpoint", type=str, default=None)
-
     args = parser.parse_args()
 
     result = predict_next_close(

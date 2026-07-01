@@ -25,9 +25,7 @@ from training.models import (
 )
 from training.utils import ensure_dir, get_device, save_json, set_seed
 
-
 DEVICE = get_device()
-
 
 def create_model_context(
     input_size: int,
@@ -37,7 +35,7 @@ def create_model_context(
     config: ExperimentConfig,
 ) -> ModelFactoryContext:
     if "close" not in feature_cols:
-        raise ValueError("Feature 'close' bắt buộc phải có để dùng last-close residual anchor.")
+        raise ValueError("Feature 'close' required for last-close residual anchor.")
 
     close_feature_index = feature_cols.index("close")
 
@@ -51,10 +49,8 @@ def create_model_context(
         use_last_close_anchor=config.use_last_close_anchor,
     )
 
-
 def train_one_epoch(model, data_loader, criterion, optimizer) -> float:
     model.train()
-
     total_loss = 0.0
     total_samples = 0
 
@@ -66,7 +62,7 @@ def train_one_epoch(model, data_loader, criterion, optimizer) -> float:
         predictions = model(X_batch)
 
         if predictions.shape != y_batch.shape:
-            raise RuntimeError(f"Prediction và target khác shape: {predictions.shape} != {y_batch.shape}")
+            raise RuntimeError(f"Shape mismatch: {predictions.shape} != {y_batch.shape}")
 
         loss = criterion(predictions, y_batch)
         loss.backward()
@@ -80,10 +76,8 @@ def train_one_epoch(model, data_loader, criterion, optimizer) -> float:
 
     return total_loss / total_samples
 
-
 def evaluate_scaled_loss(model, data_loader, criterion) -> float:
     model.eval()
-
     total_loss = 0.0
     total_samples = 0
 
@@ -91,20 +85,17 @@ def evaluate_scaled_loss(model, data_loader, criterion) -> float:
         for X_batch, y_batch in data_loader:
             X_batch = X_batch.to(DEVICE)
             y_batch = y_batch.to(DEVICE)
-
             predictions = model(X_batch)
 
             if predictions.shape != y_batch.shape:
-                raise RuntimeError(f"Prediction và target khác shape: {predictions.shape} != {y_batch.shape}")
+                raise RuntimeError(f"Shape mismatch: {predictions.shape} != {y_batch.shape}")
 
             loss = criterion(predictions, y_batch)
-
             batch_size = X_batch.size(0)
             total_loss += loss.item() * batch_size
             total_samples += batch_size
 
     return total_loss / total_samples
-
 
 def train_model(
     model,
@@ -118,49 +109,26 @@ def train_model(
     feature_cols: list[str],
 ):
     model = model.to(DEVICE)
-
     criterion = nn.MSELoss(reduction="mean")
-
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay,
     )
-
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode="min",
-        factor=0.5,
-        patience=5,
+        optimizer, mode="min", factor=0.5, patience=5,
     )
 
     best_val_loss = float("inf")
     best_state = None
     best_epoch = None
     patience_counter = 0
-
-    history = {
-        "train_loss": [],
-        "val_loss": [],
-        "learning_rate": [],
-    }
-
+    history = {"train_loss": [], "val_loss": [], "learning_rate": []}
     checkpoint_path = artifact_dir / f"best_{model_name}_w{window_size}.pt"
 
     for epoch in range(1, config.epochs + 1):
-        train_loss = train_one_epoch(
-            model=model,
-            data_loader=train_loader,
-            criterion=criterion,
-            optimizer=optimizer,
-        )
-
-        val_loss = evaluate_scaled_loss(
-            model=model,
-            data_loader=val_loader,
-            criterion=criterion,
-        )
-
+        train_loss = train_one_epoch(model, train_loader, criterion, optimizer)
+        val_loss = evaluate_scaled_loss(model, val_loader, criterion)
         scheduler.step(val_loss)
         current_lr = optimizer.param_groups[0]["lr"]
 
@@ -172,7 +140,6 @@ def train_model(
             best_val_loss = val_loss
             best_epoch = epoch
             best_state = copy.deepcopy(model.state_dict())
-
             torch.save(
                 {
                     "model_name": model_name,
@@ -187,38 +154,25 @@ def train_model(
                 },
                 checkpoint_path,
             )
-
             patience_counter = 0
         else:
             patience_counter += 1
 
         if epoch == 1 or epoch % 10 == 0:
-            print(
-                f"W={window_size:02d} | {model_name:12s} | "
-                f"Epoch={epoch:03d} | "
-                f"Train={train_loss:.6f} | "
-                f"Dev={val_loss:.6f} | "
-                f"LR={current_lr:.2e}"
-            )
+            print(f"W={window_size:02d} | {model_name:12s} | Epoch={epoch:03d} | Train={train_loss:.6f} | Dev={val_loss:.6f} | LR={current_lr:.2e}")
 
         if patience_counter >= config.patience:
-            print(
-                f"W={window_size:02d} | {model_name} early stopping tại epoch {epoch}. "
-                f"Best epoch={best_epoch}, best dev loss={best_val_loss:.6f}"
-            )
+            print(f"W={window_size:02d} | {model_name} early stopping at epoch {epoch}. Best dev loss={best_val_loss:.6f}")
             break
 
     if best_state is None:
-        raise RuntimeError(f"Không tìm được best_state cho {model_name}, window={window_size}.")
+        raise RuntimeError(f"Could not find best_state for {model_name}, window={window_size}.")
 
     model.load_state_dict(best_state)
-
     return model, history, checkpoint_path
-
 
 def predict_original_scale(model, data_loader, target_scaler) -> Tuple[np.ndarray, np.ndarray]:
     model.eval()
-
     y_true_scaled = []
     y_pred_scaled = []
 
@@ -226,26 +180,20 @@ def predict_original_scale(model, data_loader, target_scaler) -> Tuple[np.ndarra
         for X_batch, y_batch in data_loader:
             X_batch = X_batch.to(DEVICE)
             predictions = model(X_batch)
-
             y_pred_scaled.append(predictions.cpu().numpy())
             y_true_scaled.append(y_batch.numpy())
 
     y_true_scaled = np.concatenate(y_true_scaled, axis=0).reshape(-1, 1)
     y_pred_scaled = np.concatenate(y_pred_scaled, axis=0).reshape(-1, 1)
-
     y_true = target_scaler.inverse_transform(y_true_scaled).reshape(-1)
     y_pred = target_scaler.inverse_transform(y_pred_scaled).reshape(-1)
-
     return y_true, y_pred
-
 
 def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
     set_seed(config.seed)
-
     artifact_dir = ensure_dir(config.artifact_dir)
 
     print("Device:", DEVICE)
-    print("Dataset mode:", config.dataset_mode)
     print("Data path:", config.data_path)
     print("Artifact dir:", artifact_dir)
 
@@ -260,19 +208,17 @@ def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
     print("Train rows:", prepared.train_end)
     print("Dev rows:", prepared.val_end - prepared.train_end)
     print("Test rows:", len(df) - prepared.val_end)
-    print("Scaler fit rows:", prepared.train_fit_end)
 
     all_results = []
     all_predictions: Dict[tuple, dict] = {}
     all_histories: Dict[int, dict] = {}
 
     for window_size, data in window_datasets.items():
-        print("#" * 100)
+        print("-" * 80)
         print(f"WINDOW SIZE = {window_size}")
-        print("#" * 100)
+        print("-" * 80)
 
         input_size = data["X_train"].shape[-1]
-
         model_context = create_model_context(
             input_size=input_size,
             feature_cols=feature_cols,
@@ -286,16 +232,9 @@ def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
         for model_idx, model_name in enumerate(config.model_names):
             model_seed = config.seed + window_size * 100 + model_idx
             set_seed(model_seed)
-
-            print("=" * 90)
+            
             print(f"Training model={model_name}, window={window_size}, seed={model_seed}")
-
-            model_to_train = build_single_model(
-                model_name=model_name,
-                context=model_context,
-                config=config,
-            )
-
+            model_to_train = build_single_model(model_name=model_name, context=model_context, config=config)
             print(f"Parameters: {count_trainable_parameters(model_to_train):,}")
 
             trained_model, history, checkpoint_path = train_model(
@@ -312,43 +251,13 @@ def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
 
             all_histories[window_size][model_name] = history
 
-            y_val_true, y_val_pred = predict_original_scale(
-                model=trained_model,
-                data_loader=data["val_loader"],
-                target_scaler=prepared.target_scaler,
-            )
+            y_val_true, y_val_pred = predict_original_scale(trained_model, data["val_loader"], prepared.target_scaler)
+            val_metrics = calculate_metrics(y_val_true, y_val_pred, data["last_close_val"])
+            all_results.append({"window": window_size, "model": model_name, "split": "dev", **val_metrics})
 
-            val_metrics = calculate_metrics(
-                y_true=y_val_true,
-                y_pred=y_val_pred,
-                last_close=data["last_close_val"],
-            )
-
-            all_results.append({
-                "window": window_size,
-                "model": model_name,
-                "split": "dev",
-                **val_metrics,
-            })
-
-            y_test_true, y_test_pred = predict_original_scale(
-                model=trained_model,
-                data_loader=data["test_loader"],
-                target_scaler=prepared.target_scaler,
-            )
-
-            test_metrics = calculate_metrics(
-                y_true=y_test_true,
-                y_pred=y_test_pred,
-                last_close=data["last_close_test"],
-            )
-
-            all_results.append({
-                "window": window_size,
-                "model": model_name,
-                "split": "test",
-                **test_metrics,
-            })
+            y_test_true, y_test_pred = predict_original_scale(trained_model, data["test_loader"], prepared.target_scaler)
+            test_metrics = calculate_metrics(y_test_true, y_test_pred, data["last_close_test"])
+            all_results.append({"window": window_size, "model": model_name, "split": "test", **test_metrics})
 
             all_predictions[(window_size, model_name, "test")] = {
                 "date": data["test_dates"],
@@ -366,20 +275,10 @@ def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
                 torch.cuda.empty_cache()
 
     results_df = pd.DataFrame(all_results)
-
     results_df.to_csv(artifact_dir / "metrics_all_windows_dev_test.csv", index=False)
 
-    dev_results_df = (
-        results_df[results_df["split"] == "dev"]
-        .sort_values("RMSE", ascending=True)
-        .reset_index(drop=True)
-    )
-
-    test_results_df = (
-        results_df[results_df["split"] == "test"]
-        .sort_values("RMSE", ascending=True)
-        .reset_index(drop=True)
-    )
+    dev_results_df = results_df[results_df["split"] == "dev"].sort_values("RMSE").reset_index(drop=True)
+    test_results_df = results_df[results_df["split"] == "test"].sort_values("RMSE").reset_index(drop=True)
 
     dev_results_df.to_csv(artifact_dir / "metrics_dev.csv", index=False)
     test_results_df.to_csv(artifact_dir / "metrics_test.csv", index=False)
@@ -390,7 +289,6 @@ def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
     if len(test_results_df) > 0:
         best_test = test_results_df.iloc[0].to_dict()
         best_meta = {
-            "dataset_mode": config.dataset_mode,
             "model_name": best_test["model"],
             "window_size": int(best_test["window"]),
             "checkpoint_path": f"best_{best_test['model']}_w{int(best_test['window'])}.pt",
@@ -399,7 +297,6 @@ def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
             "target_col": config.target_col,
             "target_date_col": config.target_date_col,
         }
-
         save_json(best_meta, artifact_dir / "best_model_meta.json")
 
         key = (int(best_test["window"]), best_test["model"], "test")
@@ -415,13 +312,10 @@ def train_experiment(config: ExperimentConfig) -> pd.DataFrame:
             pred_df.to_csv(artifact_dir / "best_test_predictions.csv", index=False)
 
     print("Saved metrics to:", artifact_dir)
-
     return results_df
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train FPT stock forecasting models.")
-    parser.add_argument("--mode", choices=["raw", "merged"], default="merged")
     parser.add_argument("--data", type=str, default=None, help="Path to CSV data.")
     parser.add_argument("--artifact-dir", type=str, default=None, help="Path to output artifact directory.")
     parser.add_argument("--epochs", type=int, default=None)
@@ -431,33 +325,21 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=None)
     return parser.parse_args()
 
-
 def main():
     args = parse_args()
 
     config = build_config(
-        dataset_mode=args.mode,
         data_path=args.data,
         artifact_dir=args.artifact_dir,
     )
 
-    if args.epochs is not None:
-        config.epochs = args.epochs
-
-    if args.windows:
-        config.window_sizes = args.windows
-
-    if args.models:
-        config.model_names = args.models
-
-    if args.start_date:
-        config.start_date = args.start_date
-
-    if args.batch_size is not None:
-        config.batch_size = args.batch_size
+    if args.epochs is not None: config.epochs = args.epochs
+    if args.windows: config.window_sizes = args.windows
+    if args.models: config.model_names = args.models
+    if args.start_date: config.start_date = args.start_date
+    if args.batch_size is not None: config.batch_size = args.batch_size
 
     train_experiment(config)
-
 
 if __name__ == "__main__":
     main()

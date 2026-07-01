@@ -11,9 +11,8 @@ import torch
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, Dataset
 
-from training.config import DEFAULT_MERGED_EXCLUDE_COLUMNS, RAW_FPT_FEATURES, ExperimentConfig
+from training.config import RAW_FPT_FEATURES, ExperimentConfig
 from training.utils import ensure_dir, save_json
-
 
 class StockDataset(Dataset):
     def __init__(self, X: np.ndarray, y: np.ndarray):
@@ -21,14 +20,13 @@ class StockDataset(Dataset):
         self.y = torch.as_tensor(y, dtype=torch.float32).reshape(-1, 1)
 
         if len(self.X) != len(self.y):
-            raise ValueError("X và y không cùng số lượng mẫu.")
+            raise ValueError("X and y sample counts do not match.")
 
     def __len__(self) -> int:
         return len(self.X)
 
     def __getitem__(self, index: int):
         return self.X[index], self.y[index]
-
 
 @dataclass
 class PreparedData:
@@ -47,18 +45,16 @@ class PreparedData:
     all_dates: np.ndarray
     target_dates_raw: np.ndarray
 
-
 def _clean_base_dataframe(data_path: Path) -> pd.DataFrame:
     if not data_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy data file: {data_path}")
+        raise FileNotFoundError(f"Data file not found: {data_path}")
 
     df_raw = pd.read_csv(data_path)
 
     if "time" not in df_raw.columns:
-        raise KeyError("Thiếu cột bắt buộc: time")
-
+        raise KeyError("Missing required column: time")
     if "close" not in df_raw.columns:
-        raise KeyError("Thiếu cột bắt buộc: close")
+        raise KeyError("Missing required column: close")
 
     df_raw["time"] = pd.to_datetime(df_raw["time"], errors="coerce")
 
@@ -69,17 +65,13 @@ def _clean_base_dataframe(data_path: Path) -> pd.DataFrame:
         .drop_duplicates(subset=["time"], keep="last")
         .reset_index(drop=True)
     )
-
     return df_model
-
 
 def load_clean_dataframe(data_path: str | Path) -> pd.DataFrame:
     return _clean_base_dataframe(Path(data_path))
 
-
 def make_target_dataframe(df_model: pd.DataFrame, config: ExperimentConfig, drop_last_target: bool = True) -> pd.DataFrame:
     df_model = df_model.copy()
-
     df_model[config.target_col] = df_model["close"].shift(-1)
     df_model[config.target_date_col] = df_model["time"].shift(-1)
 
@@ -88,58 +80,29 @@ def make_target_dataframe(df_model: pd.DataFrame, config: ExperimentConfig, drop
 
     return df_model
 
-
 def select_feature_columns(df: pd.DataFrame, config: ExperimentConfig) -> List[str]:
-    mode = config.dataset_mode.lower().strip()
-
-    if mode == "raw":
-        missing_features = [column for column in RAW_FPT_FEATURES if column not in df.columns]
-        if missing_features:
-            raise KeyError(f"Raw FPT data thiếu feature: {missing_features}")
-
-        return RAW_FPT_FEATURES.copy()
-
-    if mode == "merged":
-        exclude_set = set(DEFAULT_MERGED_EXCLUDE_COLUMNS)
-        exclude_set.add(config.target_col)
-        exclude_set.add(config.target_date_col)
-
-        feature_cols = [
-            column
-            for column in df.columns
-            if column not in exclude_set and pd.api.types.is_numeric_dtype(df[column])
-        ]
-
-        if "close" not in feature_cols:
-            raise ValueError("Merged dataset phải có cột close để dùng last-close residual anchor.")
-
-        if not feature_cols:
-            raise ValueError("Không tìm thấy numeric feature columns trong merged dataset.")
-
-        return feature_cols
-
-    raise ValueError("dataset_mode phải là 'raw' hoặc 'merged'.")
-
+    missing_features = [column for column in RAW_FPT_FEATURES if column not in df.columns]
+    if missing_features:
+        raise KeyError(f"Raw FPT data missing features: {missing_features}")
+    return RAW_FPT_FEATURES.copy()
 
 def load_and_prepare_dataframe(config: ExperimentConfig) -> Tuple[pd.DataFrame, List[str]]:
     df_model = _clean_base_dataframe(Path(config.data_path))
     df = make_target_dataframe(df_model, config, drop_last_target=True)
-
     feature_cols = select_feature_columns(df, config)
 
     required_cols = ["time", "close", config.target_col, config.target_date_col] + feature_cols
     missing_required = [column for column in required_cols if column not in df.columns]
     if missing_required:
-        raise KeyError(f"Thiếu cột bắt buộc: {missing_required}")
+        raise KeyError(f"Missing required columns: {missing_required}")
 
     df = df.dropna(subset=feature_cols + [config.target_col, config.target_date_col]).copy()
     df = df[df["time"] >= pd.to_datetime(config.start_date)].reset_index(drop=True)
 
     if len(df) < max(config.window_sizes) + 10:
-        raise ValueError("Dữ liệu quá ít sau khi filter start_date/window_sizes.")
+        raise ValueError("Not enough data rows after applying start_date/window_sizes filters.")
 
     return df, feature_cols
-
 
 def fit_scalers_and_create_arrays(
     df: pd.DataFrame,
@@ -157,7 +120,6 @@ def fit_scalers_and_create_arrays(
     n_rows = len(df)
     train_end = int(n_rows * config.train_ratio)
     val_end = int(n_rows * (config.train_ratio + config.val_ratio))
-
     train_fit_end = max(train_end - 1, 1)
 
     feature_scaler = StandardScaler()
@@ -171,7 +133,6 @@ def fit_scalers_and_create_arrays(
 
     if save_artifacts and config.artifact_dir is not None:
         artifact_dir = ensure_dir(config.artifact_dir)
-
         joblib.dump(feature_scaler, artifact_dir / "feature_scaler.pkl")
         joblib.dump(target_scaler, artifact_dir / "target_scaler.pkl")
         save_json(feature_cols, artifact_dir / "feature_columns.json")
@@ -193,7 +154,6 @@ def fit_scalers_and_create_arrays(
         all_dates=all_dates,
         target_dates_raw=target_dates_raw,
     )
-
 
 def create_sequences_for_window(
     prepared: PreparedData,
@@ -254,14 +214,12 @@ def create_sequences_for_window(
         shuffle=True,
         drop_last=False,
     )
-
     data["val_loader"] = DataLoader(
         StockDataset(data["X_val"], data["y_val"]),
         batch_size=batch_size,
         shuffle=False,
         drop_last=False,
     )
-
     data["test_loader"] = DataLoader(
         StockDataset(data["X_test"], data["y_test"]),
         batch_size=batch_size,
@@ -270,7 +228,6 @@ def create_sequences_for_window(
     )
 
     return data
-
 
 def create_window_datasets(prepared: PreparedData, config: ExperimentConfig) -> Dict[int, Dict[str, np.ndarray | DataLoader]]:
     return {
@@ -282,7 +239,6 @@ def create_window_datasets(prepared: PreparedData, config: ExperimentConfig) -> 
         for window_size in config.window_sizes
     }
 
-
 def prepare_latest_sequence(
     data_path: str | Path,
     feature_cols: List[str],
@@ -293,18 +249,17 @@ def prepare_latest_sequence(
 
     missing_features = [column for column in feature_cols if column not in df_model.columns]
     if missing_features:
-        raise KeyError(f"Data dùng deploy thiếu feature: {missing_features}")
+        raise KeyError(f"Data for deployment is missing features: {missing_features}")
 
     df_model = df_model.dropna(subset=feature_cols + ["time", "close"]).copy()
     df_model = df_model.sort_values("time").drop_duplicates("time", keep="last").reset_index(drop=True)
 
     if len(df_model) < window_size:
-        raise ValueError(f"Dữ liệu chỉ có {len(df_model)} rows, không đủ window_size={window_size}.")
+        raise ValueError(f"Data has {len(df_model)} rows, not enough for window_size={window_size}.")
 
     latest_window_df = df_model.tail(window_size).copy()
     latest_features_raw = latest_window_df[feature_cols].to_numpy(dtype=np.float32)
     latest_features_scaled = feature_scaler.transform(latest_features_raw).astype(np.float32)
 
     X_latest = latest_features_scaled.reshape(1, window_size, len(feature_cols))
-
     return X_latest, latest_window_df

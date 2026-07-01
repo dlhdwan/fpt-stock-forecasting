@@ -17,19 +17,8 @@ RAW_FPT_FEATURES = [
 ]
 
 
-DEFAULT_MERGED_EXCLUDE_COLUMNS = [
-    "time",
-    "target_next_close",
-    "target_date",
-    "target_next_date",
-    "target",
-    "y",
-]
-
-
 @dataclass
 class ExperimentConfig:
-    dataset_mode: str = "merged"  # "merged" or "raw"
     data_path: Optional[Path] = None
     artifact_dir: Optional[Path] = None
 
@@ -77,40 +66,19 @@ class ExperimentConfig:
         return data
 
 
-def get_default_data_path(dataset_mode: str) -> Path:
-    mode = dataset_mode.lower().strip()
-
-    if mode == "raw":
-        return PROJECT_ROOT / "data" / "raw" / "fpt_stock_price.csv"
-
-    if mode == "merged":
-        return PROJECT_ROOT / "data" / "processed" / "merged_dataset.csv"
-
-    raise ValueError("dataset_mode phải là 'raw' hoặc 'merged'.")
+def get_default_data_path() -> Path:
+    return PROJECT_ROOT / "data" / "raw" / "fpt_stock_price.csv"
 
 
-def get_default_artifact_dir(dataset_mode: str) -> Path:
-    mode = dataset_mode.lower().strip()
-
-    if mode == "raw":
-        return PROJECT_ROOT / "artifacts" / "raw_fpt_only_residual_cnnlstm_transformer"
-
-    if mode == "merged":
-        return PROJECT_ROOT / "artifacts" / "merged_dataset_residual_cnnlstm_transformer"
-
-    raise ValueError("dataset_mode phải là 'raw' hoặc 'merged'.")
+def get_default_artifact_dir() -> Path:
+    return PROJECT_ROOT / "artifacts" / "raw_fpt_only_residual_cnnlstm_transformer"
 
 
 def build_config(
-    dataset_mode: str = "merged",
     data_path: Optional[str | Path] = None,
     artifact_dir: Optional[str | Path] = None,
 ) -> ExperimentConfig:
-    mode = dataset_mode.lower().strip()
-
-    cfg = ExperimentConfig(dataset_mode=mode)
-
-    cfg.data_path = Path(data_path) if data_path else get_default_data_path(mode)
-    cfg.artifact_dir = Path(artifact_dir) if artifact_dir else get_default_artifact_dir(mode)
-
+    cfg = ExperimentConfig()
+    cfg.data_path = Path(data_path) if data_path else get_default_data_path()
+    cfg.artifact_dir = Path(artifact_dir) if artifact_dir else get_default_artifact_dir()
     return cfg
