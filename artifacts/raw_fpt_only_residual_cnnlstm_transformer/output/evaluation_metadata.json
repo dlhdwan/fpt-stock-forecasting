@@ -1,9 +1,9 @@
 {
-    "evaluation_time": "2026-07-02 03:35:21",
+    "evaluation_time": "2026-07-02 05:04:42",
     "timezone": "Asia/Ho_Chi_Minh",
     "status": "success",
     "evaluator": "github-actions",
-    "host": "runnervmmklqx",
+    "host": "runnervmkkn4f",
     "model_info": {
         "checkpoint": "best_autoformer_w5.pt",
         "model_name": "autoformer"
