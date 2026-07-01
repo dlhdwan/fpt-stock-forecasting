@@ -2,11 +2,17 @@ name: Monthly Model Retraining
 
 on:
   schedule:
-    # 19:00 Vietnam time = 12:00 UTC, every Monday
+    # 17:00 Vietnam time = 10:00 UTC, every Monday
     # The job only retrains on the first Monday of each month
-    - cron: "0 12 * * 1"
+    - cron: "0 10 * * 1"
 
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  TZ: "Asia/Ho_Chi_Minh"
 
 jobs:
   retrain:
@@ -61,15 +67,28 @@ jobs:
         if: steps.check_date.outputs.should_run == 'true'
         run: |
           uv run python -m training.retrain \
-            --mode raw \
             --raw-data data/raw/fpt_stock_price.csv \
             --windows 3 5 7 30 \
             --models lstm cnn1d_lstm transformer informer autoformer
+
+      - name: Commit and Push Updated Weights
+        if: steps.check_date.outputs.should_run == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add output directory, model weights, and scalers
+          git add artifacts/raw_fpt_only_residual_cnnlstm_transformer/output/*
+          git add artifacts/raw_fpt_only_residual_cnnlstm_transformer/*.pt
+          git add artifacts/raw_fpt_only_residual_cnnlstm_transformer/*.pkl
+          git add artifacts/raw_fpt_only_residual_cnnlstm_transformer/*.json
+          
+          git commit -m "chore: auto monthly retrain to update model weights" || echo "No changes to commit"
+          git push
 
       - name: Upload retrained artifacts
         if: steps.check_date.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: monthly-retrained-raw-model
-          path: |
-            artifacts/raw_fpt_only_residual_cnnlstm_transformer/
+          path: artifacts/raw_fpt_only_residual_cnnlstm_transformer/
