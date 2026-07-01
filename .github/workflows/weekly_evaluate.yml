@@ -1,11 +1,19 @@
 name: Weekly Model Evaluation
 
 on:
+  workflow_dispatch:
+
   schedule:
-    # 18:30 Vietnam time = 11:30 UTC, every Monday
+    # 18:30 Vietnam time = 11:30 UTC
+    # Every Monday
     - cron: "30 11 * * 1"
 
-  workflow_dispatch:
+permissions:
+  contents: write
+
+env:
+  # Thiết lập timezone cho môi trường runner
+  TZ: "Asia/Ho_Chi_Minh"
 
 jobs:
   evaluate:
@@ -15,21 +23,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
-      - name: Install uv
+      - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
       - name: Set up Python
-        run: uv python install
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync
 
-      - name: Update latest data
+      - name: Update latest stock data
         run: |
           uv run python -m data_pipeline.daily_crawl
 
-      - name: Evaluate current raw model
+      - name: Evaluate current production model
         run: |
           uv run python -m training.evaluate \
             --data data/raw/fpt_stock_price.csv \
@@ -37,11 +47,34 @@ jobs:
             --max-rows 300 \
             --output-name weekly_evaluation.csv
 
-      - name: Upload evaluation results
+      - name: Generate Dashboard and Charts
+        run: |
+          uv run python -m training.report \
+            --artifact-dir artifacts/raw_fpt_only_residual_cnnlstm_transformer
+
+      - name: Show evaluation outputs
+        run: |
+          echo "Evaluation files:"
+          ls -lah artifacts/raw_fpt_only_residual_cnnlstm_transformer || true
+
+      - name: Publish Dashboard to GitHub Step Summary
+        run: |
+          # Render file report.md ra màn hình Summary của GitHub Actions
+          cat artifacts/raw_fpt_only_residual_cnnlstm_transformer/report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit evaluation results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Add mọi thay đổi trong thư mục artifacts để không bỏ sót file nào
+          git add artifacts/raw_fpt_only_residual_cnnlstm_transformer/*
+
+          git commit -m "chore: weekly model evaluation, dashboard and metrics update" || echo "No changes to commit"
+          git push
+
+      - name: Upload evaluation artifacts
         uses: actions/upload-artifact@v4
         with:
           name: weekly-evaluation-results
-          path: |
-            artifacts/raw_fpt_only_residual_cnnlstm_transformer/weekly_evaluation.csv
-            artifacts/raw_fpt_only_residual_cnnlstm_transformer/evaluation_history.csv
-            artifacts/raw_fpt_only_residual_cnnlstm_transformer/weekly_predictions.csv
+          path: artifacts/raw_fpt_only_residual_cnnlstm_transformer/
