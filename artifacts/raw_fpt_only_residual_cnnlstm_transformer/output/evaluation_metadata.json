@@ -1,5 +1,5 @@
 {
-    "evaluation_time": "2026-08-03 21:25:11",
+    "evaluation_time": "2026-08-10 19:09:37",
     "timezone": "Asia/Ho_Chi_Minh",
     "status": "success",
     "evaluator": "github-actions",
@@ -9,16 +9,16 @@
         "model_name": "transformer"
     },
     "evaluation_window": {
-        "start": "2025-05-26",
-        "end": "2026-08-03",
+        "start": "2025-06-02",
+        "end": "2026-08-10",
         "rows": 299
     },
     "metrics": {
-        "MAE": 1.2849748066675706,
-        "RMSE": 1.7156435476402137,
-        "MAPE": 1.4581540176891257,
-        "R2": 0.9824312235892673,
-        "Bias": -0.05252374910590598,
-        "Directional_Accuracy": 54.84949832775919
+        "MAE": 1.2829828916823987,
+        "RMSE": 1.714648143288845,
+        "MAPE": 1.460154530642018,
+        "R2": 0.9828207406165669,
+        "Bias": -0.056181960600275235,
+        "Directional_Accuracy": 54.515050167224075
     }
 }
