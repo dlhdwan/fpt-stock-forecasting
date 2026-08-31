@@ -1,21 +1,21 @@
 Dashboard Đánh Giá Mô Hình FPT
 
-Thời gian đánh giá: 2026-08-24 18:55:56 (Giờ VN)
+Thời gian đánh giá: 2026-09-01 01:06:08 (Giờ VN)
 
 Model Checkpoint: `best_transformer_w3.pt`
 
-Giai đoạn đánh giá: Từ `2025-06-16` đến `2026-08-24` (299 ngày)
+Giai đoạn đánh giá: Từ `2025-06-20` đến `2026-08-28` (299 ngày)
 
 ## 📈 Tổng quan Metrics
 
 | Metric | Giá trị |
 |---|---|
-| **MAE** | `1.2819` |
-| **RMSE** | `1.7146` |
-| **MAPE** | `1.4695` |
-| **R2** | `0.9836` |
-| **BIAS** | `-0.0559` |
-| **DIRECTIONAL_ACCURACY** | `54.5151` |
+| **MAE** | `1.2767` |
+| **RMSE** | `1.7077` |
+| **MAPE** | `1.4694` |
+| **R2** | `0.9838` |
+| **BIAS** | `-0.0607` |
+| **DIRECTIONAL_ACCURACY** | `54.1806` |
 
 Biểu đồ Thực tế vs Dự đoán
 
